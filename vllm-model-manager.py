@@ -75,10 +75,20 @@ class VLLMModelManager:
             self.vllm_process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.STDOUT,  # Merge stderr to stdout
                 text=True,
-                env=env
+                env=env,
+                bufsize=1  # Line buffered
             )
+            
+            # Stream output in background thread
+            def log_output():
+                for line in self.vllm_process.stdout:
+                    print(f"[vLLM] {line.rstrip()}")
+            
+            log_thread = threading.Thread(target=log_output, daemon=True)
+            log_thread.start()
+            
             self.current_model = model_name
             
             # Wait for server to be ready
