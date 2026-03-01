@@ -149,16 +149,63 @@ manager = VLLMModelManager()
 
 @app.route("/v1/models", methods=["GET"])
 def list_models():
-    """Return currently loaded model"""
+    """Return currently loaded model + available models in cache"""
     models = []
+    
+    # Currently loaded model
     if manager.current_model:
         models.append({
             "id": manager.current_model,
             "object": "model",
             "created": int(time.time()),
-            "owned_by": "vllm-mlx"
+            "owned_by": "vllm-mlx",
+            "status": "loaded"
         })
+    
     return jsonify({"object": "list", "data": models})
+
+@app.route("/models", methods=["GET"])
+def list_available_models():
+    """List all models available in LM Studio cache"""
+    import os
+    available = []
+    
+    try:
+        # Scan LM Studio cache directory
+        if os.path.exists(manager.cache_dir):
+            for org in os.listdir(manager.cache_dir):
+                org_path = os.path.join(manager.cache_dir, org)
+                if os.path.isdir(org_path) and not org.startswith('.'):
+                    for model in os.listdir(org_path):
+                        model_path = os.path.join(org_path, model)
+                        if os.path.isdir(model_path) and not model.startswith('.'):
+                            # Get model size
+                            size_bytes = sum(
+                                os.path.getsize(os.path.join(dirpath, f))
+                                for dirpath, _, filenames in os.walk(model_path)
+                                for f in filenames
+                            )
+                            size_gb = round(size_bytes / (1024**3), 2)
+                            
+                            available.append({
+                                "id": f"{org}/{model}",
+                                "name": model,
+                                "organization": org,
+                                "size_gb": size_gb,
+                                "path": model_path,
+                                "loaded": manager.current_model == f"{org}/{model}"
+                            })
+        
+        # Sort by size (largest first)
+        available.sort(key=lambda x: x["size_gb"], reverse=True)
+        
+        return jsonify({
+            "count": len(available),
+            "models": available,
+            "cache_dir": manager.cache_dir
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/v1/chat/completions", methods=["POST"])
 def chat_completions():
