@@ -72,10 +72,14 @@ class VLLMModelManager:
                     if os.path.exists(exact_path):
                         local_path = exact_path
                     else:
-                        # Try case-insensitive fuzzy match
-                        model_lower = model.lower()
+                        # Fuzzy match: normalize both names (lowercase, no special chars)
+                        import re
+                        model_normalized = re.sub(r'[^a-z0-9]', '', model.lower())
+                        
                         for item in os.listdir(org_dir):
-                            if item.lower().startswith(model_lower.replace("-", "")):
+                            item_normalized = re.sub(r'[^a-z0-9]', '', item.lower())
+                            # Check if search pattern is contained in directory name
+                            if model_normalized in item_normalized or item_normalized.startswith(model_normalized[:10]):
                                 local_path = os.path.join(org_dir, item)
                                 print(f"Fuzzy matched: {model} → {item}")
                                 break
