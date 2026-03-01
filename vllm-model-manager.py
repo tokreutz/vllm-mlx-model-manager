@@ -61,12 +61,20 @@ class VLLMModelManager:
             # Start new model
             print(f"Loading model: {model_name}")
             
-            # Set HF_HOME to LM Studio cache directory
+            # Check if model exists in LM Studio cache
+            local_path = os.path.join(self.cache_dir, model_name)
+            if os.path.exists(local_path):
+                print(f"Found model in LM Studio cache: {local_path}")
+                model_arg = local_path
+            else:
+                print(f"Model not in cache, will download from HuggingFace")
+                model_arg = model_name
+            
+            # Don't set HF_HOME if using local path (avoids confusion)
             env = os.environ.copy()
-            env['HF_HOME'] = self.cache_dir
             
             cmd = [
-                "vllm-mlx", "serve", model_name,
+                "vllm-mlx", "serve", model_arg,
                 "--port", str(self.port)
             ]
             if continuous_batching:
