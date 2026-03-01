@@ -61,9 +61,26 @@ class VLLMModelManager:
             # Start new model
             print(f"Loading model: {model_name}")
             
-            # Check if model exists in LM Studio cache
-            local_path = os.path.join(self.cache_dir, model_name)
-            if os.path.exists(local_path):
+            # Check if model exists in LM Studio cache (case-insensitive fuzzy match)
+            local_path = None
+            if "/" in model_name:
+                org, model = model_name.split("/", 1)
+                org_dir = os.path.join(self.cache_dir, org)
+                if os.path.exists(org_dir):
+                    # Try exact match first
+                    exact_path = os.path.join(org_dir, model)
+                    if os.path.exists(exact_path):
+                        local_path = exact_path
+                    else:
+                        # Try case-insensitive fuzzy match
+                        model_lower = model.lower()
+                        for item in os.listdir(org_dir):
+                            if item.lower().startswith(model_lower.replace("-", "")):
+                                local_path = os.path.join(org_dir, item)
+                                print(f"Fuzzy matched: {model} → {item}")
+                                break
+            
+            if local_path and os.path.exists(local_path):
                 print(f"Found model in LM Studio cache: {local_path}")
                 model_arg = local_path
             else:
@@ -192,6 +209,62 @@ def health():
         "current_model": manager.current_model,
         "model_loaded": manager.is_model_loaded()
     })
+
+@app.route("/experiment", methods=["POST"])
+def experiment():
+    """
+    Quick experiment endpoint - run a prompt and get stats
+    POST /experiment
+    {
+      "model": "mlx-community/qwen3.5-35b-a3b",  // optional, uses current if loaded
+      "prompt": "Your question here",
+      "max_tokens": 150  // optional, default 100
+    }
+    Returns: response + timing stats
+    """
+    import time
+    data = request.get_json()
+    
+    model = data.get("model", manager.current_model or "default")
+    prompt = data.get("prompt", "Hello!")
+    max_tokens = data.get("max_tokens", 100)
+    
+    # Load model if needed
+    if model != manager.current_model:
+        try:
+            start_load = time.time()
+            manager.load_model(model)
+            load_time = time.time() - start_load
+        except Exception as e:
+            return jsonify({"error": f"Failed to load model: {e}"}), 500
+    else:
+        load_time = 0
+    
+    # Run inference
+    start_infer = time.time()
+    try:
+        response = manager.proxy_request("/v1/chat/completions", "POST", {
+            "model": manager.current_model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens
+        })
+        infer_time = time.time() - start_infer
+        
+        result = response.get_json()
+        output_tokens = result.get("usage", {}).get("completion_tokens", 0)
+        
+        return jsonify({
+            "response": result.get("choices", [{}])[0].get("message", {}).get("content", ""),
+            "stats": {
+                "model": manager.current_model,
+                "load_time_sec": round(load_time, 2),
+                "inference_time_sec": round(infer_time, 2),
+                "output_tokens": output_tokens,
+                "tokens_per_sec": round(output_tokens / infer_time, 2) if infer_time > 0 else 0
+            }
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 def signal_handler(sig, frame):
     """Clean shutdown"""
