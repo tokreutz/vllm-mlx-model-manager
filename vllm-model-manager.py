@@ -18,7 +18,7 @@ import os
 app = Flask(__name__)
 
 class VLLMModelManager:
-    def __init__(self, port=8001, cache_dir="~/.cache/huggingface/hub"):
+    def __init__(self, port=8001, cache_dir="~/.cache/lm-studio/models"):
         self.port = port
         self.cache_dir = os.path.expanduser(cache_dir)
         self.current_model: Optional[str] = None
@@ -60,6 +60,11 @@ class VLLMModelManager:
             
             # Start new model
             print(f"Loading model: {model_name}")
+            
+            # Set HF_HOME to LM Studio cache directory
+            env = os.environ.copy()
+            env['HF_HOME'] = self.cache_dir
+            
             cmd = [
                 "vllm-mlx", "serve", model_name,
                 "--port", str(self.port)
@@ -71,7 +76,8 @@ class VLLMModelManager:
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
+                env=env
             )
             self.current_model = model_name
             

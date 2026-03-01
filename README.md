@@ -20,6 +20,24 @@ pip install flask requests
 uv tool install git+https://github.com/waybarrios/vllm-mlx.git
 ```
 
+## Configuration
+
+By default, the manager uses **LM Studio's model cache** (`~/.cache/lm-studio/models`) to avoid re-downloading models.
+
+To use a different cache directory:
+
+```python
+# Edit vllm-model-manager.py
+manager = VLLMModelManager(port=8001, cache_dir="~/.cache/huggingface/hub")
+```
+
+Or set environment variable before starting:
+
+```bash
+export HF_HOME=~/.cache/my-models
+python vllm-model-manager.py
+```
+
 ## Usage
 
 ```bash
