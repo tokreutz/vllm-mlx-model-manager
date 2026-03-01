@@ -18,7 +18,7 @@ import os
 app = Flask(__name__)
 
 class VLLMModelManager:
-    def __init__(self, port=8001, cache_dir="~/.cache/lm-studio/models"):
+    def __init__(self, port=8001, cache_dir="~/.lmstudio/models"):
         self.port = port
         self.cache_dir = os.path.expanduser(cache_dir)
         self.current_model: Optional[str] = None
